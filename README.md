@@ -1,46 +1,92 @@
-# HuMSub catalogue - Human gut microbiota subspecies carry implicit information for in-depth microbiome research
+# HuMSub Catalogue  
+Subspecies of the human gut microbiota carry implicit information for in-depth microbiome research
 
-This repository provides access to all data and code required to replicate findings from the publication.
+This repository provides all data and code needed to reproduce the results from our publication.
 
-Since the HumGut catalog is too big to upload here, you can access its metadata at: https://arken.nmbu.no/~larssn/humgut/All_genomes.tsv.
-There, you can use the links provided to download all of the genomes from their home repositories.
+## Repository Structure
 
-DISCLAIMER: The HuMSub catalogue contains genomes beloning to phyla not usually associated with the human gut (Elusimicrobiota; Eremiobacteriota; Patescibacteria), which were kept from the initial HumGut reference. While their true association with the human gut remains uncertain, we retained them to ensure completeness, relying on genome quality scores. These phyla were not detected in the follow up analyses of CRC datasets, and should be interpreted with caution.
+The code is organized into:
 
-We have split the code into "Workflows" and "Scripts". In the former, you can find all relevant SnakeMake workflows used for the publication, including:
+### Workflows (`/Workflows`)
+Snakemake pipelines used in the study:
 
-1) Quality filtering workflow that used GUNC and BUSCO for enhanced MAGs filtering ("Quality-filtering")
+1. `Quality-filtering` – MAG filtering using GUNC and BUSCO  
+2. `sourmash-compare` – Subspecies delineation  
+3. `sourmash-hash-selection` – Generation of subspecies-specific sketch databases  
+4. `use_catalog` – Subspecies quantification from metagenomes  
+5. `assign-subspecies` – Assigning new genomes to HuMSub clusters  
+6. `get_specific_sequences` – Identifying subspecies-specific genes
 
-2) Subspecies delineation workflow ("sourmash-compare")
+### Scripts (`/Scripts`)
+Jupyter notebooks for:
+- Statistical and machine learning analyses
+- Figure generation
 
-3) Subspecies-specific panhashome generation workflow ("sourmash-hash-selection")
+Notebooks are grouped by topic, matching the publication’s structure. Each includes all necessary data for re-execution.
 
-4) Subspecies quantification workflow ("use_catalog")
+## HuMSub Catalogue Data
 
-5) Assign new genomes to existing subspecies workflow ("assign-subspecies")
+The catalogue is available in two prebuilt sourmash SBT index formats:
 
-6) Subspecies-specific genes workflow ("get_specific_sequences")
+| File                        | Use Case                                |
+|-----------------------------|------------------------------------------|
+| `HuMSub_51_1000.sbt.zip`    | General subspecies quantification (k=51) |
+| `HuMSub_21_1000.sbt.zip`    | Mastiff database queries (k=21)          |
 
- To run them, please install SnakeMake, create/modify required input files and configure the corresponding "config" files.
+Download from Zenodo:  
+https://zenodo.org/records/15862096
 
- 
+## Simulated Metagenomic Data
 
-In the "Scripts" directory, you will find Jupyter Notebooks used for doing statistical/ML analysis and creating figures. They are sorted into different directories, following the structure of the publication. All data to run them is available in the corresponding subdirectories.
+For benchmarking and testing:
 
- 
+| File                      | Description                                                  |
+|---------------------------|--------------------------------------------------------------|
+| `humgut_samples.tar.gz`   | Simulated paired-end reads from HumGut genomes               |
+| `new_samples.tar.gz`      | Simulated paired-end reads from genomes outside of HumGut    |
 
-The catalog itself is available in two versions:
+Corresponding taxonomic distributions are available in `Scripts/benchmark/`.
 
-1) HuMSub_51_1000.sbt.zip: Subspecies-specific hashes created based on kmer length of 51 and scaling factor of 1000. It is used for general subspecies quantification;
+## Disclaimer
 
-2) HuMSub_21_1000.sbt.zip:  Subspecies-specific hashes created based on kmer length of 21 and scaling factor of 1000. It is used for quering Mastiff database for studying biogeographical distribution of subspecies.
+The HuMSub catalogue includes genomes from some non-gut-associated phyla (e.g., Elusimicrobiota, Eremiobacteriota, Patescibacteria) retained from the original HumGut reference.  
+Although these were not detected in CRC datasets, they were preserved for completeness based on genome quality scores. Use with caution in downstream interpretation.
 
- 
+## Getting Started
 
-Finally, you can find simulated metagenomic samples:
+1. Install Snakemake (https://snakemake.readthedocs.io) version 7
+2. Clone this repository
+3. Modify the appropriate `config.yaml` for each workflow
+4. Run with:
 
-1) humgut_samples.tar.gz: Contains ten pair-end simulated sequencing data created using MAGs from the HumGut catalog;
+```bash
+snakemake -s workflow/Snakefile --configfile config/config.yaml --use-conda --cores 4
 
-2) new_samples.tar.gz: Contains ten pair-end simulated sequencing data created using MAGs outside the HumGut catalog.
+# External Resources
 
-The correpoding taxonomical distributions are available within the "Scripts/benchmark".
+This directory lists essential external files required to reproduce the results of the HuMSub study. These resources are hosted externally due to their size and licensing constraints.
+
+## 1. HumGut Genome Metadata
+
+- **File**: `All_genomes.tsv`  
+- **Description**: Metadata and download links for all genomes in the HumGut catalog
+- **Source**:  
+  https://arken.nmbu.no/~larssn/humgut/All_genomes.tsv
+
+## 2. HuMSub Catalogue and Benchmark Data
+
+- **Zenodo Record**:  
+  https://zenodo.org/records/15862096
+
+This includes:
+
+- `HuMSub_51_1000.sbt.zip` – k=51, scaled=1000 (subspecies quantification)
+- `HuMSub_21_1000.sbt.zip` – k=21, scaled=1000 (Mastiff queries)
+- `humgut_samples.tar.gz` – simulated reads from HumGut genomes
+- `new_samples.tar.gz` – simulated reads from genomes outside HumGut
+
+After download, place files into the appropriate subdirectories (e.g. `resources/`, `test_data/`).
+
+## Note
+
+Some files may be automatically downloaded by Snakemake rules if not found in the expected locations. Refer to the main `README.md` for pipeline instructions.
