@@ -1,0 +1,11 @@
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+    - python=3.10
+    - pandas
+    - seaborn
+    - scikit-learn
+    - scipy
+    - fastcluster
+    - tqdm

@@ -1,0 +1,9 @@
+channels:
+    - conda-forge
+    - bioconda
+    - pytorch
+dependencies:
+    - biopython
+    - pandas
+    - fair-esm
+    - pytorch

@@ -1,0 +1,112 @@
+import os
+
+
+configfile: f"{os.path.dirname(workflow.snakefile)}/../config/default_config.yaml"
+
+
+checkpoint create_batch_files:
+    output:
+        batch_dir=directory("output/MAGs/batches"),
+    conda:
+        "sourmash"
+    log:
+        "output/log/create_batch_file.log",
+    threads: 1
+    resources:
+        mem_mb=9000,
+        time_min=30,
+        tmpdir=config["tmp_dir"],
+    script:
+        "scripts/create_batch_file.py"
+
+
+rule sketch_proteins:
+    input:
+        batch_file="output/MAGs/batches/batch_{cluster95}.csv",
+    output:
+        flag=touch("output/flags/{cluster95}.log"),
+    group:
+        "{cluster95}"
+    conda:
+        "sourmash"
+    log:
+        "output/log/sketch/{cluster95}.log",
+    threads: 1
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min=int(config["time_min"]),
+        tmpdir=config["tmp_dir"],
+    params:
+        kmer_len=config["kmer_len"],
+        scaled=config["scaled"],
+    shell:
+        "sourmash sketch fromfile {input.batch_file} -p protein,k={params.kmer_len},scaled={params.scaled} -o {resources.tmpdir}/{wildcards.cluster95}.zip  &> {log} "
+
+
+rule compare_proteins:
+    input:
+        flag=rules.sketch_proteins.output.flag,
+    output:
+        matrix="output/distance_matrix/{cluster95}.csv",
+    group:
+        "{cluster95}"
+    conda:
+        "sourmash"
+    log:
+        "output/log/compare/{cluster95}.log",
+    threads: config["threads"]
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min=int(config["time_min"]),
+        tmpdir=config["tmp_dir"],
+    params:
+        kmer_len=config["kmer_len"],
+    shell:
+        "sourmash compare --ksize {params.kmer_len} --protein --ani --processes {threads} --csv {output.matrix} {resources.tmpdir}/{wildcards.cluster95}.zip  &> {log}"
+
+
+def concatenate_sketches(wildcards):
+    batch_folder = checkpoints.create_batch_files.get(**wildcards).output.batch_dir
+    all_clusters = glob_wildcards(
+        os.path.join(batch_folder, "batch_{cluster95}.csv")
+    ).cluster95
+    return expand("output/distance_matrix/{cluster95}.csv", cluster95=all_clusters)
+
+
+rule compare_all:
+    input:
+        concatenate_sketches,
+
+
+rule cluster:
+    input:
+        distance_matrix=rules.compare_proteins.output.matrix,
+    output:
+        subsp_definition="output/clustering/subsp_def/{cluster95}.txt",
+        info="output/clustering/info/{cluster95}_info.tsv",
+    log:
+        "output/log/clustering/{cluster95}.log",
+    conda:
+        "envs/clustering.yaml"
+    params:
+        script_dir=f"{os.path.dirname(workflow.snakefile)}/scripts/clustering_scripts",
+    threads: 1
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min=int(config["time_min"]),
+        tmpdir=config["tmp_dir"],
+    script:
+        "scripts/clustering.py"
+
+
+def concatenate_clusters(wildcards):
+    batch_folder = checkpoints.create_batch_files.get(**wildcards).output.batch_dir
+    all_clusters = glob_wildcards(
+        os.path.join(batch_folder, "batch_{cluster95}.csv")
+    ).cluster95
+    return expand("output/clustering/subsp_def/{cluster95}.txt", cluster95=all_clusters)
+
+
+rule cluster_all:
+    input:
+        concatenate_clusters,

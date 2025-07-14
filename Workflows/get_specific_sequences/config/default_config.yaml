@@ -1,0 +1,43 @@
+manifest_path: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/SOURMASH-MANIEST.csv
+subsp_def: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/fullname_subsp_def_sourmash.txt
+genome_paths: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/folder_structure_full.tsv
+
+signatures_path: /srv/beegfs/scratch/users/t/trickovi/sourmash/get_specific_sequences/resources/specific_hashes
+prodigal_output: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/prodigal_output.tsv
+fasta_header_path: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/fasta_headers_baobab.tsv
+header_subspecies_mapping: /srv/beegfs/scratch/users/t/trickovi/sourmash/get_specific_sequences/resources/header_subspecies_mapping.tsv
+
+cluster_threshold: 0.9
+
+java_load: "module load Java/11.0.2"
+
+kmer_size: 51
+deduplication_threshold: 90 #The percentage to deduplicate subspecies-specific genes
+id_threshold: 0.9 # The treshold for clustering similar genes for annotation.
+
+# If a function is found in <= upper_threshold of genomes of one subspecies and > lower_threshold of all others, the function will be deemed specific
+upper_threshold: 0.8 
+lower_threshold: 0.2
+
+# For MSA, allow this many duplicates of each gene per genome. E.g., if there are 10 genomes in the species, it will analyze only those functions with less or equal then  duplicates_allowed * 10 = 20 copies in total.
+duplicates_allowed: 2
+
+# Maximal number of functions per batch for msa
+maximal_functions_per_batch: 30
+
+# The percentage of genes with a subspecies that has to have a certain function in order to do MSA
+msa_threshold: 0.5
+# The percenage of variants for the median len of the gene allowed in MSA before considering sequences too diverse for PROSTATA
+diverse_threshold: 0.5
+
+# To split the file in order to run PROSTATA in prallel
+max_number_of_variants: 50
+
+model_path: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/models
+### RESOURCES ###
+threads: 8
+mem_mb: 36000
+time_min: 320
+
+dram_config_path: /home/users/t/trickovi/scratch/dram/DRAM_config.txt
+inteproscan_path: /home/users/t/trickovi/scratch/sourmash/get_specific_sequences/resources/interproscan-5.64-96.0

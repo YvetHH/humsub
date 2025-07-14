@@ -1,0 +1,16 @@
+path_table: /home/users/t/trickovi/scratch/sourmash/sourmash-compare/resources/A_muciniphila.tsv
+
+kmer_len: 51
+scaled: 100
+
+
+#RESOURCES
+tmp_dir: /scratch
+mem_mb: 120000
+time_min: 400
+threads: 4
+
+##clustering
+prediction_strength_cutoff: 0.8
+lower_threshold_n_genomes: 10 # The lowest number of MAGs within a cluster96.5 that is worthy clustering
+n_iterations: 20

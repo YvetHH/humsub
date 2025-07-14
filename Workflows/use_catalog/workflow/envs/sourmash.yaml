@@ -1,0 +1,8 @@
+name: sourmash-4.6.1
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - sourmash=4.6.1
+  - python=3.9  # or 3.10, adjust to match your Snakemake environment

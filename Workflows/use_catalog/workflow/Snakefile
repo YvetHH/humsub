@@ -1,0 +1,179 @@
+import os
+
+
+configfile: f"{os.path.dirname(workflow.snakefile)}/../config/default_config.yaml"
+RESOURCE_DIR = os.path.join(os.path.dirname(workflow.snakefile), "../resources")
+
+(SAMPLES,) = glob_wildcards("output/trimmed_reads/{sample}")
+
+if config["trim_reads"] == False:
+
+    localrules:
+        trim_reads,
+
+
+SAMPLE_TABLE_PATH = config.get("sample_table", "samples.tsv")
+FASTQ_DIR = config.get("fastq_dir", "reads")
+
+if config.get("generate_sample_table", False):
+
+    rule generate_sample_table:
+        output:
+            SAMPLE_TABLE_PATH,
+        run:
+            import os
+            import pandas as pd
+            from glob import glob
+
+            fastqs = sorted(
+                glob(os.path.join(config.get("fastq_dir", "reads"), "*.fastq.gz"))
+            )
+
+            sample_dict = {}
+            for fq in fastqs:
+                sample_name = os.path.basename(fq).split("_")[0]
+                if sample_name not in sample_dict:
+                    sample_dict[sample_name] = {}
+                if "_R1" in fq:
+                    sample_dict[sample_name]["Reads_QC_R1"] = fq
+                elif "_R2" in fq:
+                    sample_dict[sample_name]["Reads_QC_R2"] = fq
+                else:
+                    sample_dict[sample_name]["Reads_QC_se"] = fq
+
+            df = pd.DataFrame.from_dict(sample_dict, orient="index")
+            df.index.name = "sample"
+            df.to_csv(output[0], sep="\t", na_rep="")
+
+
+
+include: "sample_table.smk"
+
+
+rule all:
+    input:
+        "output/subspecies_taxonomy.csv",
+
+
+rule download_sbt_index:
+    output:
+        os.path.join(RESOURCE_DIR, "HuMSub_51_1000.sbt.zip")
+    shell:
+        """
+        mkdir -p {RESOURCE_DIR}
+        wget -O {output} https://zenodo.org/records/15862096/files/HuMSub_51_1000.sbt.zip
+        """
+
+
+rule trim_reads:
+    input:
+        get_quality_controlled_reads,
+    output:
+        trimmed_reads=directory("output/trimmed_reads/{sample}"),
+    conda:
+        "envs/sourmash.yaml",
+    log:
+        "output/log/trimm_reads/{sample}.log",
+    threads: 1
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min=int(config["time_min"]),
+        cpus_per_task=1,
+    params:
+        mem=int(config["mem_mb"]) * 1000000 * 0.9,
+        tmp_dir=config["tmp_dir"],
+    script:
+        "scripts/trim_reads.py"
+
+
+rule sketch_reads:
+    input:
+        rules.trim_reads.output.trimmed_reads,
+    output:
+        sketch="output/sketch_samples/{sample}.sig",
+    conda:
+        "envs/sourmash.yaml"
+    log:
+        "output/log/sketch_reads/{sample}.log",
+    benchmark:
+        "output/benchmark/sketch_reads/{sample}.txt"
+    threads: int(config["threads"])
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min=int(config["time_min"]),
+        tmpdir=config["tmp_dir"],
+        cpus_per_task=config["threads"],
+    params:
+        kmer_len=config["kmer_len"],
+        scaled=config["scaled"],
+        tmp_dir=config["tmp_dir"],
+        mem=int(config["mem_mb"]) * 1000000 * 0.9,
+    shell:
+        "mkdir -p output/sketch_samples && "
+        "sourmash sketch dna -p k={params.kmer_len},abund,scaled={params.scaled} {input}/*.fastq.gz --merge {wildcards.sample} -o {output.sketch} &> {log}"
+
+
+rule gather:
+    input:
+        sample_sketch=rules.sketch_reads.output.sketch,
+    output:
+        gather="output/gather/{sample}.csv",
+    conda:
+        "envs/sourmash.yaml",
+    log:
+        "output/log/gather/{sample}.log",
+    benchmark:
+        "output/benchmark/gather/{sample}.txt"
+    threads: 1
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min=int(config["time_min"]),
+        tmpdir=config["tmp_dir"],
+    params:
+        kmer_len=config["kmer_len"],
+        scaled=config["scaled"],
+        humsub_path=config["humsub_path"],
+        threshold_bp=config["threshold_bp"],
+        scaled_downsample=config["scaled_downsample"],
+    shell:
+        "mkdir -p output/gather && "
+        "sourmash gather -k {params.kmer_len} --threshold-bp={params.threshold_bp} --scaled {params.scaled_downsample} -o {output.gather} {input.sample_sketch} {params.humsub_path} &> {log}"
+
+
+rule gather_all:
+    input:
+        expand("output/gather/{sample}.csv", sample=SAMPLES),
+    output:
+        "output/subspecies_relab.csv",
+    conda:
+        "envs/sourmash.yaml",
+    log:
+        "output/log/gather/all_gather.log",
+    threads: 1
+    resources:
+        mem_mb=12000,
+        time_min=10,
+        tmpdir=config["tmp_dir"],
+    script:
+        "scripts/gather_all.py"
+
+
+rule map_taxonomy:
+    input:
+        subsp_relab="output/subspecies_relab.csv",
+        taxonomy_table=config["taxonomy_table"],
+    output:
+        "output/subspecies_taxonomy.csv",
+    conda:
+        "envs/sourmash.yaml",
+    log:
+        "output/log/map_taxonomy.log",
+    threads: 1
+    resources:
+        mem_mb=12000,
+        time_min=10,
+        tmpdir=config["tmp_dir"],
+    params:
+        taxonomy_version=config["taxonomy_version"],
+    script:
+        "scripts/map_taxonomy.py"

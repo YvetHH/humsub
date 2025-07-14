@@ -1,0 +1,93 @@
+import os
+
+
+configfile: f"{os.path.dirname(workflow.snakefile)}/../config/default_config.yaml"
+
+rule all:
+    input:
+        "output/assigned_subspecies.tsv"
+
+
+if config['input_text_file'] != "":
+    make_lists_input = config["input_text_file"],
+else:
+    make_lists_input = config['input_dir']
+
+checkpoint make_batches:
+    input:
+        make_lists_input,
+    output:
+        batch_dir=directory("output/batches/"),
+    log:
+        "output/log/make_batches.log"
+    resources:
+        mem_mb= 10 *1000,
+        time_min= 10
+    threads: 1
+    script:
+        "scripts/make_lists.py"
+
+rule sketch_MAGs:
+    input:
+        input_batch="output/batches/{batch}.csv"
+    output:
+        signature="output/MAG_sketches/{batch}.zip"
+    conda:
+        "sourmash"
+    log:
+        "output/log/MAG_sketches/{batch}.log"
+    threads: 1
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min= 10,
+        tmpdir=config['tmpdir']
+    params:
+        kmer_len=config["kmer_len"],
+        scaled=config["scaled"],
+        tmp_dir=config["tmpdir"],
+    shell:
+        "sourmash sketch fromfile {input.input_batch} -p dna,k={params.kmer_len},scaled={params.scaled} -o {output.signature} &> {log[0]}"
+    
+rule assign_subspecies:
+    input:
+        sketch=rules.sketch_MAGs.output.signature,
+        index=config['specific_hashomes']
+    output:
+        search_result="output/search/{batch}.tsv"
+    conda:
+        "sourmash"
+    log:
+        "output/log/assign_subspecies/{batch}.log"
+    threads: config['threads']
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        time_min= int(config["time_min"]),
+        tmpdir=config['tmpdir']
+    params:
+        kmer_len=config["kmer_len"],
+        scaled=config["scaled"],
+        tmp_dir=config["tmpdir"],
+    script:
+        "scripts/assign_subspecies.py"
+
+def concatenate_output(wildcards):
+    batch_folder = checkpoints.make_batches.get(**wildcards).output[0]
+    all_batches = glob_wildcards(os.path.join(batch_folder, "{batch}.csv")).batch
+    return expand(
+        "output/search/{batch}.tsv", batch=all_batches
+    )
+
+rule merge_output:
+    input:
+        concatenate_output
+    output:
+        "output/assigned_subspecies.tsv"
+    conda:
+        "sourmash"
+    threads: 1
+    resources:
+        mem_mb=int(config["mem_mb"]),
+        runtime= 10,
+        tmpdir=config['tmpdir']
+    shell:
+        "csvtk concat -T -t -o {output[0]} output/search/*.tsv"

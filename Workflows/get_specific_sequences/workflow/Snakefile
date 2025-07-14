@@ -1,0 +1,355 @@
+import os
+
+configfile: f"{os.path.dirname(workflow.snakefile)}/../config/default_config.yaml"
+
+#CLUSTERS95 = ['0136','1316','0174','4194','0451','1601','2423','0046','0352','0701','1914','3701']
+#RERUN 0033; 0157
+# CLUSTERS95 = ['0174', '1354', '2050', '2031', '1129', '0183', '0885', '1216', '4665',
+#        '0601']
+
+CLUSTERS95 = ['0001',
+ '0002',
+ '0003',
+ '0004',
+ '0005',
+ '0006',
+ '0009',
+ '0011',
+ '0013',
+ '0014',
+ '0018',
+ '0020',
+ '0023',
+ '0024',
+ '0027',
+ '0030',
+ '0031',
+ '0033',
+ '0035',
+ '0036',
+ '0037',
+ '0038',
+ '0040',
+ '0041',
+ '0044',
+ '0045',
+ '0046',
+ '0051',
+ '0052',
+ '0053',
+ '0055',
+ '0056',
+ '0057',
+ '0058',
+ '0062',
+ '0064',
+ '0065',
+ '0066',
+ '0067',
+ '0068',
+ '0071',
+ '0072',
+ '0073',
+ '0076',
+ '0079',
+ '0083',
+ '0084',
+ '0085',
+ '0086',
+ '0088']
+
+wildcard_constraints:
+    cluster95=r"\b\w{4}\b"
+
+rule all:
+    input:
+        expand("output/prostata/{cluster95}.tsv",cluster95=CLUSTERS95)
+
+checkpoint split_species:
+    input:
+        genome_paths=config['genome_paths'],
+    output:
+        directory("output/species_batches")
+    log:
+        "output/log/split_species.log"
+    conda:
+        "envs/split_species.yaml"
+    threads: 1
+    resources:
+        mem_mb=12000,
+        time_min=30
+    script:
+        "scripts/split_species.py"
+
+rule prefetch_signatures:
+    input:
+        batch="output/species_batches/{cluster95}.tsv"
+    output:
+        prefetch=directory("output/prefetch/{cluster95}")
+    log:
+        "output/log/prefetch/{cluster95}.log"
+    conda:
+        "envs/sourmash.yaml"
+    threads: 1
+    resources:
+        mem_mb=24000,
+        time_min=180,
+        tmpdir="/scratch"
+    script:
+        "scripts/prefetch.py"
+        
+rule get_specific_kmers:
+    input:
+        specific_hashome = "/srv/beegfs/scratch/users/t/trickovi/sourmash/get_specific_sequences/resources/specific_hashes/{cluster95}",
+        prefetch=rules.prefetch_signatures.output.prefetch
+    output:
+        specific_kmers=directory("output/specific_kmers/{cluster95}")
+    log:
+        "output/log/specific_kmers/{cluster95}.log"
+    conda:
+        "envs/sourmash.yaml"
+    threads: 4
+    resources:
+        mem_mb=12000,
+        time_min=520,
+        tmpdir='/scratch'
+    script:
+        "scripts/get_specific_kmers.py"
+
+rule get_specific_genes:
+    input:
+        specific_kmers=rules.get_specific_kmers.output.specific_kmers,
+        prefetch=rules.prefetch_signatures.output.prefetch
+    output:
+        specific_genes=directory("output/specific_genes/{cluster95}")
+    log:
+        "output/log/specific_genes/{cluster95}.log"
+    conda:
+        "envs/seqkit.yaml"
+    threads: 1
+    resources:
+        time_min=30,
+        mem_mb=24000,
+        tmpdir='/scratch'
+    script:
+        "scripts/get_specific_genes.py"
+
+rule create_mmseqs_db:
+    input:
+        input_fna_dir = rules.get_specific_genes.output.specific_genes,
+        genome_paths=config['genome_paths']
+    output:
+        db=directory("output/mmseqs/{cluster95}/db"),
+        protein_output="output/genes/{cluster95}.faa"
+    conda:
+        "envs/mmseqs.yaml"
+    log:
+        "output/log/{cluster95}/mmseqs/make_db.log"
+    threads: config['threads']
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=config['time_min'],
+        tmpdir="/scratch"
+    script:
+        "scripts/create_mmseqs_db.py"
+
+rule mmseqs_cluster:
+    input:
+        mmseqs_search=rules.create_mmseqs_db.output.db,
+    output:
+        cluster_db=directory("output/mmseqs/{cluster95}/cluster"),
+        cluster_tsv="output/mmseqs/{cluster95}/cluster_attribution.tsv",
+        cluster_reps="output/mmseqs/{cluster95}/cluster_reps.fasta"
+    conda:
+        "envs/mmseqs.yaml"
+    log:
+        "output/log/mmseqs/{cluster95}/cluster.log"
+    threads: 4
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=config['time_min'],
+        tmpdir="/scratch"
+    params:
+        cluster_threshold=config['cluster_threshold']
+    shell:
+        "mkdir -p {output.cluster_db} && "
+        "mmseqs cluster {input}/{wildcards.cluster95}_full {output.cluster_db}/cluster_db {resources.tmpdir} --min-seq-id {params.cluster_threshold} --threads {threads} &> {log[0]} && "
+        "mmseqs createtsv {input}/{wildcards.cluster95}_full {input}/{wildcards.cluster95}_full {output.cluster_db}/cluster_db {output.cluster_tsv} 2>> {log} && "
+        "mmseqs createsubdb {output.cluster_db}/cluster_db {input}/{wildcards.cluster95}_full {resources.tmpdir}/DB_clu_rep 2>> {log} && "
+        "mmseqs convert2fasta {resources.tmpdir}/DB_clu_rep {output.cluster_reps} 2>> {log}"
+
+rule setup_dram:
+    output:
+        touch("progress/DRAM_setup_finished")
+    conda:
+        "envs/DRAM.yaml"
+    threads: 1,
+    resources:
+        mem_mb=12000,
+        runtime=30
+    params:
+        dram_config_loc=config['dram_config_path']
+    shell:
+        "DRAM-setup.py import_config --config_loc {params.dram_config_loc}"
+
+rule annotate_proteins:
+    input:
+        rules.setup_dram.output,
+        input_fasta = rules.mmseqs_cluster.output.cluster_reps,
+    output:
+        dram_annotation=directory("output/annotation/{cluster95}/dram")
+    conda:
+        "envs/DRAM.yaml"
+    log:
+        "output/log/{cluster95}/dram/annotate.log"
+    threads: config['threads']
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=config['time_min'],
+        tmpdir="/scratch"
+    shell:
+        "DRAM.py annotate_genes -i {input.input_fasta} -o {output.dram_annotation} --threads {threads} --log_file_path {log}"
+
+rule calculate_summary:
+    input:
+        annotations = rules.annotate_proteins.output.dram_annotation,
+        cluster_attribution = rules.mmseqs_cluster.output.cluster_tsv,
+    output:
+        specific_functions = "output/summary/{cluster95}/specific_functions.tsv",
+        shared_functions = "output/summary/{cluster95}/shared_functions.tsv"
+    log:
+        "output/log/{cluster95}/summary.log"
+    threads: 1
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=30
+    script:
+        "scripts/calculate_summary.py"
+
+
+checkpoint split_msa:
+    input:
+        shared_functions = rules.calculate_summary.output.shared_functions,
+        cluster_attribution = rules.mmseqs_cluster.output.cluster_tsv,
+        annotations = rules.annotate_proteins.output.dram_annotation,
+        protein_seqs = rules.create_mmseqs_db.output.protein_output
+    output:
+        msa = directory("output/msa/batches/{cluster95}")
+    conda:
+        "envs/msa.yaml"
+    log:
+        "output/log/msa/split/{cluster95}.log"
+    threads: 1
+    resources:
+        mem_mb=12000,
+        time_min=120,
+        tmpdir="/scratch"
+    script:
+        "scripts/split_msa.py"
+
+rule msa:
+    input:
+        shared_functions = "output/msa/batches/{cluster95}/batch_{counter}.tsv",
+        cluster_attribution = rules.mmseqs_cluster.output.cluster_tsv,
+        annotations = rules.annotate_proteins.output.dram_annotation,
+        protein_seqs = rules.create_mmseqs_db.output.protein_output
+    output:
+        msa = "output/msa/batch_output/{cluster95}/{counter}.tsv"
+    conda:
+        "envs/msa.yaml"
+    log:
+        "output/log/msa/{cluster95}_{counter}.log"
+    threads: 8
+    resources:
+        mem_mb=128000,
+        time_min=120,
+        tmpdir="/scratch"
+    script:
+        "scripts/msa.py"
+
+def concatenate_msa_output(wildcards):
+    batch_folder = checkpoints.split_msa.get(**wildcards).output[0]
+    all_batches = glob_wildcards(os.path.join(batch_folder, "batch_{counter}.tsv")).counter
+    return expand(
+        "output/msa/batch_output/{cluster95}/{counter}.tsv", cluster95=wildcards.cluster95, counter=all_batches
+    )
+
+rule concat_msa:
+    input:
+        concatenate_msa_output,
+    output:
+        msa = "output/msa/{cluster95}.tsv"
+    log:
+        "output/log/concat_msa/{cluster95}.log"
+    conda:
+        "envs/split_species.yaml"
+    threads: 1
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=60,
+        tmpdir="/scratch"
+    script:
+        "scripts/concat_msa.py"
+
+
+checkpoint split_prostata:
+    input:
+        msa_output = rules.concat_msa.output.msa,
+        protein_seqs = rules.create_mmseqs_db.output.protein_output,
+        annotation = rules.annotate_proteins.output.dram_annotation,
+        cluster_attribution = rules.mmseqs_cluster.output.cluster_tsv
+    output:
+        tmp_output=directory("output/prostata/tmp/{cluster95}")
+    conda:
+        "envs/prostata.yaml"
+    log:
+        "output/log/prostata/split/{cluster95}.log"
+    threads: 16
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=120,
+        tmpdir="/scratch"
+    script:
+        "scripts/split_prostata.py"
+
+rule prostata:
+    input:
+        batch_df = "output/prostata/tmp/{cluster95}/batch_{counter}.tsv"
+    output:
+        variant_effect = "output/prostata/tmp/batch_output/{cluster95}/{counter}.tsv"
+    conda:
+        "envs/prostata.yaml"
+    log:
+        "output/log/prostata/{cluster95}/run/{counter}.log"
+    threads: 8
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=180,
+        tmpdir="/scratch"
+    script:
+        "scripts/prostata.py"
+
+
+def concatenate_prostata_output(wildcards):
+    batch_folder = checkpoints.split_prostata.get(**wildcards).output[0]
+    all_batches = glob_wildcards(os.path.join(batch_folder, "batch_{counter}.tsv")).counter
+    return expand(
+        "output/prostata/tmp/batch_output/{cluster95}/{counter}.tsv", cluster95=wildcards.cluster95, counter=all_batches
+    )
+
+rule concat_prostata:
+    input:
+        concatenate_prostata_output,
+    output:
+        variant_effect = "output/prostata/{cluster95}.tsv"
+    log:
+        "output/log/concat_prostata/{cluster95}.log"
+    conda:
+        "envs/split_species.yaml"
+    threads: 1
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=520,
+        tmpdir="/scratch"
+    script:
+        "scripts/concat_prostata.py"
