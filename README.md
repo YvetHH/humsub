@@ -12,10 +12,9 @@ Snakemake pipelines used in the study:
 
 1. `Quality-filtering` – MAG filtering using GUNC and BUSCO  
 2. `sourmash-compare` – Subspecies delineation  
-3. `sourmash-hash-selection` – Generation of subspecies-specific sketch databases  
-4. `use_catalog` – Subspecies quantification from metagenomes  
-5. `assign-subspecies` – Assigning new genomes to HuMSub clusters  
-6. `get_specific_sequences` – Identifying subspecies-specific genes
+3. `use_catalog` – Subspecies quantification from metagenomes  
+4. `assign-subspecies` – Assigning new genomes to HuMSub clusters  
+5. `get_specific_sequences` – Identifying subspecies-specific genes
 
 ### Scripts (`/Scripts`)
 Jupyter notebooks for:
