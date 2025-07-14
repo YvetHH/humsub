@@ -61,6 +61,7 @@ Although these were not detected in CRC datasets, they were preserved for comple
 
 ```bash
 snakemake -s workflow/Snakefile --configfile config/config.yaml --use-conda --cores 4
+```
 
 # External Resources
 
