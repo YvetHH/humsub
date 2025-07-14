@@ -30,7 +30,7 @@ The workflow:
 
 ```bash
 # Clone the full project
-git clone https://github.com/YOUR_USERNAME/humsub.git
+git clone https://github.com/trajkovski-lab/humsub.git
 cd humsub/Workflows/use_catalog
 
 # Copy and edit config
