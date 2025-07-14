@@ -36,12 +36,17 @@ cd humsub/Workflows/use_catalog
 # Copy and edit config
 cp ../config/default_config.yaml config.yaml
 # Edit paths inside config.yaml to match your setup
+```
 
+## Usage
+
+```bash
 snakemake --snakefile workflow/Snakefile \
           --configfile config.yaml \
           --use-conda \
           --cores 4
 ```
+
 ## Inputs
 
 You can either:
