@@ -5,7 +5,7 @@ sample_table: path/to/output/samples.tsv  # Path where the sample table will be 
 
 # Database & taxonomy
 humsub_path: resources/HuMSub_51_1000.sbt.zip  # Path towards the panhashome
-taxonomy_table: path/to/database/taxonomy_mapping.tsv  # Mapping of internal names to taxonomy
+taxonomy_table: resources/taxonomy_mapping.tsv  # Mapping of internal names to taxonomy
 taxonomy_version: RS226_taxonomy  # Choose between RS226_taxonomy or RS95_taxonomy
 
 # Preprocessing options
