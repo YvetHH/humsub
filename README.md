@@ -68,10 +68,8 @@ This directory lists essential external files required to reproduce the results 
 
 ## 1. HumGut Genome Metadata
 
-- **File**: `All_genomes.tsv`  
+- **File**: `All_genomes.tsv` in Scripts/benchmark
 - **Description**: Metadata and download links for all genomes in the HumGut catalog
-- **Source**:  
-  https://arken.nmbu.no/~larssn/humgut/All_genomes.tsv
 
 ## 2. HuMSub Catalogue and Benchmark Data
 
