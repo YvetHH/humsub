@@ -1,4 +1,17 @@
+# channels:
+#   - bioconda
+# dependencies:
+#   - gunc =1.0.4
+name: gunc_py
 channels:
   - bioconda
+  - conda-forge
+  - defaults
 dependencies:
-  - gunc =1.0.4
+  - python=3.8
+  - diamond=2.0.4
+  - prodigal
+  - pandas=1.5.3
+  - pip
+  - pip:
+      - gunc==1.0.4
