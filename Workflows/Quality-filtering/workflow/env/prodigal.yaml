@@ -3,3 +3,4 @@ channels:
 dependencies:
   - any2fasta
   - prodigal
+  - tqdm
